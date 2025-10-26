@@ -4,7 +4,7 @@ import { IndexedObject } from '../../shared/common/helpers/typeHelpers';
 type VarGenerator = () => string;
 type IntermediateQueryResult = {
 	query: string;
-	variableName?: string;
+	variableNames: string[];
 	props?: IndexedObject;
 };
 type PreparedQuery = { query: string; props: IndexedObject };
@@ -42,24 +42,25 @@ class Neo4J {
 		let params: IndexedObject = {};
 
 		for (const item of queries) {
-			const hasVariable = item.variableName !== undefined;
+			const hasVariable = item.variableNames.length > 0;
 			if (hasVariable) {
-				if (usedVariableNames.includes(item.variableName!)) {
-					throw new Error('Duplicate variable name. Cannot proceed safely.');
+				// Add and check all variable names
+				for (const variableName of item.variableNames) {
+					if (usedVariableNames.includes(variableName)) {
+						throw new Error('Duplicate variable name. Cannot proceed safely.');
+					}
+					usedVariableNames.push(variableName!);
 				}
-				usedVariableNames.push(item.variableName!);
+				// Add and check all props
+				for (const [propName, propValue] of Object.entries(item.props ?? {})) {
+					if (params[propName] !== undefined) {
+						throw new Error('Duplicate property name. Cannot proceed safely.');
+					}
+					params[propName] = propValue;
+				}
 			}
 
 			query += `\n${item.query}`;
-
-			for (const [propName, propValue] of Object.entries(item.props ?? {})) {
-				if (!hasVariable) break;
-				const paramKey = `${propName}__${item.variableName}`;
-				if (params[paramKey] !== undefined) {
-					throw new Error('Duplicate property name. Cannot proceed safely.');
-				}
-				params[paramKey] = propValue;
-			}
 		}
 
 		return { query: query.trim(), props: params };

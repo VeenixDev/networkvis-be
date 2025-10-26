@@ -28,13 +28,13 @@ describe('Neo4J + Cypher Builder', () => {
 			{
 				query: 'MERGE (a:Account { id: $id__a })',
 				props: {
-					id: 'abc'
+					id__a: 'abc'
 				},
-				variableName: 'a',
+				variableNames: ['a'],
 			},
 			{
 				query: 'RETURN a',
-				variableName: undefined,
+				variableNames: [],
 				props: {
 					varNames: ['a'],
 				},
@@ -69,13 +69,13 @@ describe('Neo4J + Cypher Builder', () => {
 			{
 				query: 'MERGE (a:Account { id: $id__a })',
 				props: {
-					id: 'abc'
+					id__a: 'abc'
 				},
-				variableName: 'a',
+				variableNames: ['a'],
 			},
 			{
 				query: 'RETURN a',
-				variableName: undefined,
+				variableNames: [],
 				props: {
 					varNames: ['a'],
 				},

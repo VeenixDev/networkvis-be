@@ -1,5 +1,5 @@
 import * as mockConfig from '../../shared/common/config/mockConfig';
-import CypherBuilder from './CypherBuilder';
+import CypherBuilder, { createRef } from './CypherBuilder';
 
 describe('CypherBuilder', () =>  {
 	beforeAll(() => {
@@ -9,29 +9,34 @@ describe('CypherBuilder', () =>  {
 	it ('Generate simple Query', () => {
 		const builder = new CypherBuilder();
 
-		builder.Merge().Node('Account', { id: 'abc' });
-		const accountVar = builder.currentQuery?.varName;
+
+		const accountVar = createRef('varname');
+		const relationVar = createRef('varname');
+		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', {}, { varRef: relationVar });
 
 		if (accountVar === undefined) {
 			throw new Error('No variable name for Account.')
 		}
+		if (relationVar === undefined) {
+			throw new Error('No variable name for Relation.')
+		}
 
-		builder.Return(accountVar);
+		builder.Return(accountVar, relationVar);
 
 		const query = builder.build();
 		expect(query).toEqual([
 			{
-				query: 'MERGE (a:Account { id: $id__a })',
-				variableName: 'a',
+				query: 'MERGE (a:Account { id: $id__a })-[b:Bar]->',
+				variableNames: ['a', 'b'],
 				props: {
-					id: 'abc'
+					id__a: 'abc'
 				},
 			},
 			{
-				query: 'RETURN a',
-				variableName: undefined,
+				query: 'RETURN a, b',
+				variableNames: [],
 				props: {
-					varNames: ['a'],
+					varNames: ['a', 'b'],
 				},
 			},
 		]);

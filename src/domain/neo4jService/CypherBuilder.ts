@@ -21,7 +21,13 @@ type IntermediateBuilderQuery = {
 type BuilderOptions = {
 	varRef?: Ref<'varname'>;
 	objRef?: Ref<'object'>;
-}
+};
+
+type BuildFragment = {
+	query: string;
+	props?: IndexedObject;
+	variableNames: string[];
+};
 
 // Builder Types for Fluent API
 type StatementPathBuilder = Omit<BaseBuilder, 'Match' | 'Merge' | 'Optional'>;
@@ -103,7 +109,9 @@ class BaseBuilder {
 				} else if (ref.refType === 'object') {
 					const varName = (ref.value as IntermediateBuilderQuery).varName;
 					if (varName === undefined) {
-						throw new Error('Cannot get variable name of object reference with no variable.');
+						throw new Error(
+							'Cannot get variable name of object reference with no variable.'
+						);
 					}
 					return varName;
 				} else {
@@ -121,7 +129,7 @@ class BaseBuilder {
 				varNames: computedVarNames,
 			},
 			children: [],
-		}
+		};
 
 		this.queryList.push(query);
 		return this;
@@ -130,7 +138,7 @@ class BaseBuilder {
 	public Relation<T extends IndexedObject = IndexedObject>(
 		label?: string,
 		props?: Props<T>,
-		options?: BuilderOptions,
+		options?: BuilderOptions
 	): BuilderWithOut<'Relation', StatementPathBuilder> {
 		if (!this._currentQuery) {
 			throw addNoQueryError('Relation');
@@ -146,7 +154,7 @@ class BaseBuilder {
 			varName,
 			props,
 			children: [],
-		}
+		};
 
 		this._currentQuery.children.push(obj);
 
@@ -165,7 +173,7 @@ class BaseBuilder {
 	public Node<T extends IndexedObject = IndexedObject>(
 		label?: string,
 		props?: Props<T>,
-		options?: BuilderOptions,
+		options?: BuilderOptions
 	): BuilderWithOut<'Node', StatementPathBuilder> {
 		if (!this._currentQuery) {
 			throw addNoQueryError('Node');
@@ -217,16 +225,16 @@ class BaseBuilder {
 
 			results.push({
 				...fragment,
-			})
+			});
 		}
 
 		return results;
 	}
 
-	private buildFragment(fragment: IntermediateBuilderQuery): { query: string, props?: IndexedObject, variableName?: string } {
+	private buildFragment(fragment: IntermediateBuilderQuery): BuildFragment {
 		let result: string[] = [];
 		let props = fragment.props;
-		let varName: string | undefined = undefined;
+		let varNames: string[] = [];
 
 		switch (fragment.type) {
 			case BuilderQueryTypes.MATCH:
@@ -236,9 +244,7 @@ class BaseBuilder {
 				if (matchChildren.props) {
 					props = { ...props, ...matchChildren.props };
 				}
-				if (matchChildren.varName) {
-					varName = matchChildren.varName;
-				}
+				varNames.push(...matchChildren.variableNames)
 				break;
 			case BuilderQueryTypes.MERGE:
 				result.push('MERGE ');
@@ -247,67 +253,78 @@ class BaseBuilder {
 				if (mergeChildren.props) {
 					props = { ...props, ...mergeChildren.props };
 				}
-				if (mergeChildren.varName) {
-					varName = mergeChildren.varName;
-				}
+				varNames.push(...mergeChildren.variableNames);
 				break;
 			case BuilderQueryTypes.RELATION:
+				if (!fragment.varName) {
+					fragment.varName = this.varGenerator();
+				}
 				result.push(`-[${fragment.varName ?? ''}:${fragment.label}`);
-				result.push(this.buildPropsString(fragment.props, fragment.varName));
+				result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
 				result.push(']->');
 				if (fragment.varName) {
-					varName = fragment.varName;
+					varNames.push(fragment.varName);
 				}
 				break;
 			case BuilderQueryTypes.NODE:
+				if (!fragment.varName) {
+					fragment.varName = this.varGenerator();
+				}
 				result.push(`(${fragment.varName ?? ''}:${fragment.label}`);
-				result.push(this.buildPropsString(fragment.props, fragment.varName));
+				result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
 				result.push(')');
 				if (fragment.varName) {
-					varName = fragment.varName;
+					varNames.push(fragment.varName);
 				}
 				break;
 			case BuilderQueryTypes.RETURN:
-				result.push(`RETURN ${(fragment.props!['varNames'] as string[]).join(', ')}`);
+				result.push(
+					`RETURN ${(fragment.props!['varNames'] as string[]).join(', ')}`
+				);
 				break;
 			default:
 				throw new Error(`Unsupported type of fragment "${fragment.type}"`);
 		}
 
-		return { query: result.join(''), props, variableName: varName };
+		return { query: result.join(''), props, variableNames: varNames };
 	}
 
-	private buildChildren(children: IntermediateBuilderQuery[]): { query: string, props?: IndexedObject, varName?: string } {
+	private buildChildren(children: IntermediateBuilderQuery[]): BuildFragment {
 		const result: string[] = [];
 		let props: IndexedObject = {};
-		let varName: string | undefined = undefined;
+		let varNames: string[] = [];
 
 		for (const child of children) {
 			const childBuild = this.buildFragment(child);
 			result.push(childBuild.query);
 			if (childBuild.props && child.varName) {
-				if (varName !== undefined) {
-					throw new Error('Children contain more than one variable name. Cannot proceed safely.')
-				}
-				varName = childBuild.variableName;
-				for (const [key, value] of Object.entries(childBuild.props)) {
-					props[`${key}`] = value;
-				}
+				varNames.push(...childBuild.variableNames);
+				props = { ...props, ...this.generateProps(childBuild.props, child.varName)}
 			}
 		}
 
-		return { query: result.join(' '), props, varName };
+		return { query: result.join(''), props, variableNames: varNames };
 	}
 
-	private buildPropsString(props?: IndexedObject, varName?: string): string {
+	private generateProps(props: IndexedObject, varName: string): IndexedObject {
+		const result: IndexedObject = {}
+
+		for (const [key, value] of Object.entries(props)) {
+			result[`${key}__${varName}`] = value;
+		}
+
+		return result;
+	}
+
+	private buildPropsString(props: IndexedObject, varName: string): string {
 		const result: string[] = [];
 		const tempResult: string[] = [];
-		if (props) {
-			result.push(' { ')
+		if (props && Object.keys(props).length > 0) {
+			result.push(' { ');
 			for (const key of Object.keys(props)) {
 				tempResult.push(`${key}: $${key}__${varName}`);
 			}
-			result.push(tempResult.join(', '), ' }')
+			result.push(tempResult.join(', '), ' }');
 		}
 		return result.join('');
 	}
@@ -332,18 +349,14 @@ function createRef<T extends RefType>(type: T): Ref<T> {
 }
 
 export default BaseBuilder;
-export {
-	Ref,
-	createRef,
-}
+export { Ref, createRef };
 export type {
 	RefType,
 	BuilderOptions,
 	Props,
 	IntermediateBuilderQuery,
-
 	BuilderWithOut,
 	StatementStartBuilder,
 	StatementPathBuilder,
-	OptionalBuilder
-}
+	OptionalBuilder,
+};
