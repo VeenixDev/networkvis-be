@@ -1,0 +1,24 @@
+services:
+  loki:
+    image: grafana/loki
+    ports:
+      - "3100:3100"
+    healthcheck:
+      test: [ "CMD", "wget", "-O-", "http://localhost:3100/ready" ]
+      interval: 10s
+      timeout: 15s
+      retries: 10
+      start_period: 10s
+
+  neo4j:
+    image: neo4j
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/neo4jneo4j
+    volumes:
+      - neo4j-data:/data
+
+volumes:
+  neo4j-data:
