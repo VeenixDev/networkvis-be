@@ -12,7 +12,7 @@ describe('CypherBuilder', () =>  {
 
 		const accountVar = createRef('varname');
 		const relationVar = createRef('varname');
-		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', {}, { varRef: relationVar });
+		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', { id: 'def'}, { varRef: relationVar });
 
 		if (accountVar === undefined) {
 			throw new Error('No variable name for Account.')
@@ -26,10 +26,11 @@ describe('CypherBuilder', () =>  {
 		const query = builder.build();
 		expect(query).toEqual([
 			{
-				query: 'MERGE (a:Account { id: $id__a })-[b:Bar]->',
+				query: 'MERGE (a:Account { id: $id__a })-[b:Bar { id: $id__b }]->',
 				variableNames: ['a', 'b'],
 				props: {
-					id__a: 'abc'
+					id__a: 'abc',
+					id__b: 'def',
 				},
 			},
 			{
