@@ -41,5 +41,37 @@ describe('CypherBuilder', () =>  {
 				},
 			},
 		]);
+	});
+
+	it ('Generate Query with nameless Element', () => {
+		const builder = new CypherBuilder();
+
+		const accountVar = createRef('varname');
+		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', { id: 'def'});
+
+		if (accountVar === undefined) {
+			throw new Error('No variable name for Account.')
+		}
+
+		builder.Return(accountVar);
+
+		const query = builder.build();
+		expect(query).toEqual([
+			{
+				query: 'MERGE (a:Account { id: $id__a })-[:Bar { id: $id__b }]->',
+				variableNames: ['a', 'b'],
+				props: {
+					id__a: 'abc',
+					id__b: 'def',
+				},
+			},
+			{
+				query: 'RETURN a',
+				variableNames: [],
+				props: {
+					varNames: ['a'],
+				},
+			},
+		]);
 	})
 })

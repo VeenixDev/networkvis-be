@@ -256,22 +256,26 @@ class BaseBuilder {
 				varNames.push(...mergeChildren.variableNames);
 				break;
 			case BuilderQueryTypes.RELATION:
-				if (!fragment.varName) {
-					fragment.varName = this.varGenerator();
-				}
 				result.push(`-[${fragment.varName ?? ''}:${fragment.label}`);
-				result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
+				if (fragment.props) {
+					if (!fragment.varName) {
+						fragment.varName = this.varGenerator();
+					}
+					result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
+				}
 				result.push(']->');
 				if (fragment.varName) {
 					varNames.push(fragment.varName);
 				}
 				break;
 			case BuilderQueryTypes.NODE:
-				if (!fragment.varName) {
-					fragment.varName = this.varGenerator();
-				}
 				result.push(`(${fragment.varName ?? ''}:${fragment.label}`);
-				result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
+				if (fragment.props) {
+					if (!fragment.varName) {
+						fragment.varName = this.varGenerator();
+					}
+					result.push(this.buildPropsString(fragment.props ?? {}, fragment.varName));
+				}
 				result.push(')');
 				if (fragment.varName) {
 					varNames.push(fragment.varName);
