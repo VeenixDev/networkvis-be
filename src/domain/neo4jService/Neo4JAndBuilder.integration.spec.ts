@@ -1,6 +1,14 @@
 import * as mockConfig from '../../shared/common/config/mockConfig';
 import Neo4J from './Neo4J';
-import CypherBuilder, { createRef, Ref } from './CypherBuilder';
+import CypherBuilder, {
+	createObjRef,
+	createVarRef,
+	Ref,
+} from './CypherBuilder';
+
+type AccountProps = {
+	id: string;
+}
 
 describe('Neo4J + Cypher Builder', () => {
 	beforeAll(() => {
@@ -11,7 +19,7 @@ describe('Neo4J + Cypher Builder', () => {
 		const neo4j = new Neo4J();
 		const builder = new CypherBuilder();
 
-		const accountVar: Ref<'varname'> = createRef('varname');
+		const accountVar: Ref<'varname', AccountProps> = createVarRef<AccountProps>();
 
 		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar });
 
@@ -52,7 +60,7 @@ describe('Neo4J + Cypher Builder', () => {
 		const neo4j = new Neo4J();
 		const builder = new CypherBuilder();
 
-		const accountObj: Ref<'object'> = createRef('object');
+		const accountObj: Ref<'object', AccountProps> = createObjRef<AccountProps>();
 
 		builder.Merge().Node('Account', { id: 'abc' }, { objRef: accountObj });
 

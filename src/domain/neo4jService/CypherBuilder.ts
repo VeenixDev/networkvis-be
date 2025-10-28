@@ -32,8 +32,9 @@ type BuildFragment = {
 // Builder Types for Fluent API
 type StatementPathBuilder = Omit<BaseBuilder, 'Match' | 'Merge' | 'Optional'>;
 type StatementStartBuilder = Omit<BaseBuilder, 'Node' | 'Relation' | 'Return'>;
-type OptionalBuilder = Pick<BaseBuilder, 'Match' | 'Merge'>;
+type OptionalBuilder = Pick<BaseBuilder, 'Match'>;
 type BuilderWithOut<T extends keyof BaseBuilder, D = BaseBuilder> = Omit<D, T>;
+type TerminalBuilder = Pick<BaseBuilder, 'build'>;
 
 type Props<T extends IndexedObject> = T;
 
@@ -92,36 +93,15 @@ class BaseBuilder {
 		return this;
 	}
 
-	public Return(...varNames: (string | Ref<RefType>)[]): StatementStartBuilder {
+	// TODO: Implement return of specific props (Use _R from Ref)
+	// TODO: Only allow for varNames in the form of refs
+	public Return(...varNames: (string | Ref<RefType>)[]): TerminalBuilder {
 		if (varNames.length === 0) {
 			throw new Error('Cannot generate "Return" with no provided arguments.');
 		}
 
 		const type = BuilderQueryTypes.RETURN;
-		const computedVarNames = varNames.map((v): string => {
-			if (typeof v !== 'string' && (v as Ref<RefType>).__isRef) {
-				const ref = v as Ref<RefType>;
-				if (ref.value === null) {
-					throw new Error('Ref cannot be empty.');
-				}
-				if (ref.refType === 'varname') {
-					return ref.value as string;
-				} else if (ref.refType === 'object') {
-					const varName = (ref.value as IntermediateBuilderQuery).varName;
-					if (varName === undefined) {
-						throw new Error(
-							'Cannot get variable name of object reference with no variable.'
-						);
-					}
-					return varName;
-				} else {
-					throw new Error('Unknown ref type.');
-				}
-			} else if (typeof v === 'string') {
-				return v;
-			}
-			throw new Error('Return does only accept either a string or a Ref.');
-		});
+		const computedVarNames = this.computeVariableNames(varNames);
 
 		const query: IntermediateBuilderQuery = {
 			type,
@@ -135,6 +115,7 @@ class BaseBuilder {
 		return this;
 	}
 
+	// TODO: Add type safety by passing Property Type further down
 	public Relation<T extends IndexedObject = IndexedObject>(
 		label?: string,
 		props?: Props<T>,
@@ -170,6 +151,7 @@ class BaseBuilder {
 		return this;
 	}
 
+	// TODO: Add type safety by passing Property Type further down
 	public Node<T extends IndexedObject = IndexedObject>(
 		label?: string,
 		props?: Props<T>,
@@ -205,7 +187,7 @@ class BaseBuilder {
 		return this;
 	}
 
-	public Optional(): BuilderWithOut<'Optional', OptionalBuilder> {
+	public Optional(): OptionalBuilder {
 		const query = {
 			type: BuilderQueryTypes.OPTIONAL,
 			children: [],
@@ -216,6 +198,9 @@ class BaseBuilder {
 
 		return this;
 	}
+
+	// TODO: Implement the rest of the Cypher keywords
+	// TODO: Implement flow control functions (If, For, While, Break) with type-safe interfaces
 
 	public build(): IntermediateQueryResult[] {
 		const results: IntermediateQueryResult[] = [];
@@ -332,11 +317,38 @@ class BaseBuilder {
 		}
 		return result.join('');
 	}
+
+	private computeVariableNames(varNames: (string | Ref<RefType>)[]): string[] {
+		return varNames.map((v): string => {
+			if (typeof v !== 'string' && (v as Ref<RefType>).__isRef) {
+				const ref = v as Ref<RefType>;
+				if (ref.value === null) {
+					throw new Error('Ref cannot be empty.');
+				}
+				if (ref.refType === 'varname') {
+					return ref.value as string;
+				} else if (ref.refType === 'object') {
+					const varName = (ref.value as IntermediateBuilderQuery).varName;
+					if (varName === undefined) {
+						throw new Error(
+							'Cannot get variable name of object reference with no variable.'
+						);
+					}
+					return varName;
+				} else {
+					throw new Error('Unknown ref type.');
+				}
+			} else if (typeof v === 'string') {
+				return v;
+			}
+			throw new Error('Return does only accept either a string or a Ref.');
+		});
+	}
 }
 
 type RefType = 'varname' | 'object';
 
-class Ref<T extends RefType> {
+class Ref<T extends RefType, _P extends IndexedObject = IndexedObject> {
 	public readonly refType: T;
 	public value: string | IntermediateBuilderQuery | null;
 
@@ -348,12 +360,20 @@ class Ref<T extends RefType> {
 	}
 }
 
-function createRef<T extends RefType>(type: T): Ref<T> {
-	return new Ref<T>(type);
+function createRef<T extends RefType, P extends IndexedObject = IndexedObject>(type: T): Ref<T, P> {
+	return new Ref<T, P>(type);
+}
+
+function createVarRef<P extends IndexedObject = IndexedObject>(): Ref<'varname', P> {
+	return new Ref<'varname', P>('varname');
+}
+
+function createObjRef<P extends IndexedObject = IndexedObject>(): Ref<'object', P> {
+	return new Ref<'object', P>('object');
 }
 
 export default BaseBuilder;
-export { Ref, createRef };
+export { Ref, createRef, createVarRef, createObjRef };
 export type {
 	RefType,
 	BuilderOptions,

@@ -25,6 +25,7 @@ class Neo4J {
 		await this.driver.close();
 	}
 
+	// TODO: Add support for typed response
 	public async execute(query: PreparedQuery): Promise<QueryResult> {
 		const session = this.driver.session();
 		try {
