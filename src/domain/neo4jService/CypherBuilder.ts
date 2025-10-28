@@ -7,14 +7,18 @@ enum BuilderQueryTypes {
 	RELATION = 'RELATION',
 	NODE = 'NODE',
 	OPTIONAL = 'OPTIONAL',
+	SET = 'SET',
+	ON_CREATE = 'ON_CREATE',
+	ON_MATCH = 'ON_MATCH',
 	RETURN = 'RETURN',
 }
 
 type IntermediateBuilderQuery = {
-	type: string;
+	type: BuilderQueryTypes;
 	varName?: string;
 	label?: string;
 	props?: IndexedObject;
+	internalProps?: IndexedObject;
 	children: IntermediateBuilderQuery[];
 };
 
@@ -31,7 +35,9 @@ type BuildFragment = {
 
 // Builder Types for Fluent API
 type StatementPathBuilder = Omit<BaseBuilder, 'Match' | 'Merge' | 'Optional'>;
-type StatementStartBuilder = Omit<BaseBuilder, 'Node' | 'Relation' | 'Return'>;
+type MergeBuilder = Omit<BaseBuilder, 'Merge' | 'Match' | 'Optional'>;
+type SetBuilder = Pick<BaseBuilder, 'Set'>;
+type StatementStartBuilder = Omit<BaseBuilder, 'Node' | 'Relation'>;
 type OptionalBuilder = Pick<BaseBuilder, 'Match'>;
 type BuilderWithOut<T extends keyof BaseBuilder, D = BaseBuilder> = Omit<D, T>;
 type TerminalBuilder = Pick<BaseBuilder, 'build'>;
@@ -80,7 +86,7 @@ class BaseBuilder {
 		return this;
 	}
 
-	public Merge(): StatementPathBuilder {
+	public Merge(): MergeBuilder {
 		const type = BuilderQueryTypes.MERGE;
 		const query: IntermediateBuilderQuery = {
 			type,
@@ -105,7 +111,7 @@ class BaseBuilder {
 
 		const query: IntermediateBuilderQuery = {
 			type,
-			props: {
+			internalProps: {
 				varNames: computedVarNames,
 			},
 			children: [],
@@ -188,7 +194,7 @@ class BaseBuilder {
 	}
 
 	public Optional(): OptionalBuilder {
-		const query = {
+		const query: IntermediateBuilderQuery = {
 			type: BuilderQueryTypes.OPTIONAL,
 			children: [],
 		};
@@ -199,6 +205,48 @@ class BaseBuilder {
 		return this;
 	}
 
+	public OnCreate(): SetBuilder {
+		const query: IntermediateBuilderQuery = {
+			type: BuilderQueryTypes.ON_CREATE,
+			children: [],
+		};
+
+		this.queryList.push(query);
+		this._currentQuery = query;
+
+		return this;
+	}
+
+	public OnMatch(): SetBuilder {
+		const query: IntermediateBuilderQuery = {
+			type: BuilderQueryTypes.ON_MATCH,
+			children: [],
+		};
+
+		this.queryList.push(query);
+		this._currentQuery = query;
+
+		return this;
+	}
+
+	public Set<T extends IndexedObject = IndexedObject>(ref: Ref<RefType>, props: T): StatementStartBuilder {
+		const query: IntermediateBuilderQuery = {
+			type: BuilderQueryTypes.SET,
+			children: [],
+			internalProps: {
+				ref: ref,
+				props: props
+			}
+		};
+
+		if (this._currentQuery !== null && [BuilderQueryTypes.ON_CREATE, BuilderQueryTypes.ON_MATCH].includes(this._currentQuery.type)) {
+			this._currentQuery.children.push(query);
+		} else {
+			this.queryList.push(query);
+			this._currentQuery = query;
+		}
+		return this;
+	}
 	// TODO: Implement the rest of the Cypher keywords
 	// TODO: Implement flow control functions (If, For, While, Break) with type-safe interfaces
 
@@ -223,7 +271,7 @@ class BaseBuilder {
 
 		switch (fragment.type) {
 			case BuilderQueryTypes.MATCH:
-				result.push('MATCH');
+				result.push('MATCH ');
 				const matchChildren = this.buildChildren(fragment.children);
 				result.push(matchChildren.query);
 				if (matchChildren.props) {
@@ -267,9 +315,58 @@ class BaseBuilder {
 				}
 				break;
 			case BuilderQueryTypes.RETURN:
+				if (!fragment.internalProps) {
+					throw new Error('Return cannot have no internal Props');
+				}
 				result.push(
-					`RETURN ${(fragment.props!['varNames'] as string[]).join(', ')}`
+					`RETURN ${(fragment.internalProps['varNames'] as string[]).join(', ')}`
 				);
+				break;
+			case BuilderQueryTypes.ON_CREATE:
+				result.push('ON CREATE ');
+				let onCreateChildren = this.buildChildren(fragment.children);
+				result.push(onCreateChildren.query);
+				if (onCreateChildren.props) {
+					props = { ...props, ...onCreateChildren.props };
+				}
+				varNames.push(...onCreateChildren.variableNames);
+				break;
+			case BuilderQueryTypes.ON_MATCH:
+				result.push('ON MATCH ');
+				let onMatchChildren = this.buildChildren(fragment.children);
+				result.push(onMatchChildren.query);
+				if (onMatchChildren.props) {
+					props = { ...props, ...onMatchChildren.props };
+				}
+				varNames.push(...onMatchChildren.variableNames);
+				break;
+			case BuilderQueryTypes.OPTIONAL:
+				result.push('OPTIONAL');
+				break;
+			case BuilderQueryTypes.SET:
+				if (!fragment.internalProps) {
+					throw new Error('Set cannot have no internal props');
+				}
+				if (!fragment.internalProps['ref']) {
+					throw new Error('Set cannot have no varRef');
+				}
+				const varRef = this.computeVariableNames([fragment.internalProps['ref'] as Ref<RefType>])[0];
+
+				if (!varRef) {
+					throw new Error('Could not resolve variable reference');
+				}
+
+				result.push(`SET`);
+
+				const tempSetArr: string[] = []
+				const setInternalProps = fragment.internalProps['props'] as IndexedObject;
+				for (const [key, _] of Object.entries(setInternalProps)) {
+					tempSetArr.push(`${varRef}.${key} = $${key}__${varRef}`);
+				}
+
+				props = this.generateProps(setInternalProps, varRef);
+
+				result.push(' ', tempSetArr.join(', '));
 				break;
 			default:
 				throw new Error(`Unsupported type of fragment "${fragment.type}"`);
@@ -289,6 +386,8 @@ class BaseBuilder {
 			if (childBuild.props && child.varName) {
 				varNames.push(...childBuild.variableNames);
 				props = { ...props, ...this.generateProps(childBuild.props, child.varName)}
+			} else if (childBuild.props) {
+				props = { ...props, ...childBuild.props };
 			}
 		}
 

@@ -2,6 +2,7 @@ import neo4j, { QueryResult } from 'neo4j-driver';
 import { Config } from '../../shared/common/config/config';
 import { IndexedObject } from '../../shared/common/helpers/typeHelpers';
 type VarGenerator = () => string;
+
 type IntermediateQueryResult = {
 	query: string;
 	variableNames: string[];
@@ -9,6 +10,8 @@ type IntermediateQueryResult = {
 };
 type PreparedQuery = { query: string; props: IndexedObject };
 
+// TODO: Update to use a facade instead of noe4j directly.
+// TODO: Implement Facade for neo4j
 class Neo4J {
 	public readonly driver;
 
@@ -52,6 +55,8 @@ class Neo4J {
 					}
 					usedVariableNames.push(variableName!);
 				}
+			}
+			if (Object.keys(item.props ?? {}).length > 0) {
 				// Add and check all props
 				for (const [propName, propValue] of Object.entries(item.props ?? {})) {
 					if (params[propName] !== undefined) {

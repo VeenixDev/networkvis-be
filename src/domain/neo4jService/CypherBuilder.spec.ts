@@ -36,9 +36,6 @@ describe('CypherBuilder', () =>  {
 			{
 				query: 'RETURN a, b',
 				variableNames: [],
-				props: {
-					varNames: ['a', 'b'],
-				},
 			},
 		]);
 	});
@@ -68,10 +65,37 @@ describe('CypherBuilder', () =>  {
 			{
 				query: 'RETURN a',
 				variableNames: [],
-				props: {
-					varNames: ['a'],
-				},
 			},
 		]);
-	})
-})
+	});
+
+	it ('Generate Query with Set', () => {
+		const builder = new CypherBuilder();
+
+		const accountVar = createRef('varname');
+		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar }).OnCreate().Set(accountVar, { name: 'Max' }).Return(accountVar);
+
+		const query = builder.build();
+
+		expect(query).toEqual([
+			{
+				query: 'MERGE (a:Account { id: $id__a })',
+				variableNames: ['a'],
+				props: {
+					id__a: 'abc',
+				}
+			},
+			{
+				query: 'ON CREATE SET a.name = $name__a',
+				props: {
+					name__a: 'Max',
+				},
+				variableNames: [],
+			},
+			{
+				query: 'RETURN a',
+				variableNames: [],
+			}
+		]);
+	});
+});

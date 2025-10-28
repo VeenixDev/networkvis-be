@@ -43,9 +43,6 @@ describe('Neo4J + Cypher Builder', () => {
 			{
 				query: 'RETURN a',
 				variableNames: [],
-				props: {
-					varNames: ['a'],
-				},
 			},
 		]);
 		expect(prepared).toEqual({
@@ -84,9 +81,6 @@ describe('Neo4J + Cypher Builder', () => {
 			{
 				query: 'RETURN a',
 				variableNames: [],
-				props: {
-					varNames: ['a'],
-				},
 			},
 		]);
 		expect(prepared).toEqual({
@@ -95,5 +89,44 @@ describe('Neo4J + Cypher Builder', () => {
 				id__a: 'abc'
 			}
 		});
+	});
+
+	it ('Should generate valid Cypher with ON CREATE SET', () => {
+		const neo4j = new Neo4J();
+		const builder = new CypherBuilder();
+
+		const accountVar = createVarRef();
+		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar }).OnCreate().Set(accountVar, { name: 'Max' }).Return(accountVar);
+
+		const built = builder.build();
+		const prepared = neo4j.prepareQueries(...built);
+
+		expect(built).toEqual([
+			{
+				query: 'MERGE (a:Account { id: $id__a })',
+				variableNames: ['a'],
+				props: {
+					id__a: 'abc',
+				}
+			},
+			{
+				query: 'ON CREATE SET a.name = $name__a',
+				props: {
+					name__a: 'Max',
+				},
+				variableNames: [],
+			},
+			{
+				query: 'RETURN a',
+				variableNames: [],
+			}
+		]);
+		expect(prepared).toEqual({
+			query: 'MERGE (a:Account { id: $id__a })\nON CREATE SET a.name = $name__a\nRETURN a',
+			props: {
+				id__a: 'abc',
+				name__a: 'Max',
+			}
+		})
 	});
 });
