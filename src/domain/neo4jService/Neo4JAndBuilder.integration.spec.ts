@@ -1,10 +1,11 @@
 import * as mockConfig from '../../shared/common/config/mockConfig';
 import Neo4J from './Neo4J';
-import CypherBuilder, {
+import {
 	createObjRef,
 	createVarRef,
 	Ref,
-} from './CypherBuilder';
+} from './Ref';
+import CypherBuilder from './CypherBuilder';
 
 type AccountProps = {
 	id: string;

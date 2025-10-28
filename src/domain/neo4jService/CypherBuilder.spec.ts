@@ -1,5 +1,6 @@
 import * as mockConfig from '../../shared/common/config/mockConfig';
-import CypherBuilder, { createRef } from './CypherBuilder';
+import CypherBuilder from './CypherBuilder';
+import { createVarRef } from './Ref';
 
 describe('CypherBuilder', () =>  {
 	beforeAll(() => {
@@ -10,8 +11,8 @@ describe('CypherBuilder', () =>  {
 		const builder = new CypherBuilder();
 
 
-		const accountVar = createRef('varname');
-		const relationVar = createRef('varname');
+		const accountVar = createVarRef();
+		const relationVar = createVarRef();
 		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', { id: 'def'}, { varRef: relationVar });
 
 		if (accountVar === undefined) {
@@ -43,7 +44,7 @@ describe('CypherBuilder', () =>  {
 	it ('Generate Query with nameless Element', () => {
 		const builder = new CypherBuilder();
 
-		const accountVar = createRef('varname');
+		const accountVar = createVarRef();
 		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar}).Relation('Bar', { id: 'def'});
 
 		if (accountVar === undefined) {
@@ -72,7 +73,7 @@ describe('CypherBuilder', () =>  {
 	it ('Generate Query with Set', () => {
 		const builder = new CypherBuilder();
 
-		const accountVar = createRef('varname');
+		const accountVar = createVarRef();
 		builder.Merge().Node('Account', { id: 'abc' }, { varRef: accountVar }).OnCreate().Set(accountVar, { name: 'Max' }).Return(accountVar);
 
 		const query = builder.build();
